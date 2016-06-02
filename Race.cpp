@@ -80,8 +80,10 @@ void init(Data * data)
     std::cin >> data->cities[i].g;
 }
 
-int test1(Data & data)
+int test()
 {
+  static Data data;
+  init(&data);
   int maxL = 1;
 
   for (int i = 0; i < data.n; i++)
@@ -90,16 +92,12 @@ int test1(Data & data)
 
     if (l > maxL)
       maxL = l;
+
+    if (maxL >= data.n - i)
+      break;
   }
 
   return maxL;
-}
-
-int test()
-{
-  static Data data;
-  init(&data);
-  return test1(data);
 }
 
 int main()
