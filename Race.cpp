@@ -2,7 +2,9 @@
 #include <iostream>
 #include <iomanip>
 #include <ctime>
+#include <string.h>
 
+#define LLONG_MIN (-9223372036854775807LL - 1)  // minimum signed long long int value
 #define min(a, b) (((a) < (b)) ? (a) : (b))
 #define max(a, b) (((a) > (b)) ? (a) : (b))
 #define MAX_CITY_COUNT 100000
@@ -16,11 +18,49 @@ struct City
   long long minbg;
 };
 
-struct Data
+class Data
 {
+public:
+  City cities[MAX_CITY_COUNT];
   int n;
   int k;
-  City cities[MAX_CITY_COUNT];
+  long long gifts;
+  long long gas;
+  long long nextGas;
+  int maxL;
+  City * end;
+  City * head;
+  City * tail;
+  City * start;
+  City * finish;
+  City * lastMinBackwardGasCity;
+  City * firstMinBackwardGasCity;
+
+  void init()
+  {
+    memset(cities, 0, sizeof(cities));
+
+    std::cin >> n >> k;
+
+    for (int i = 0; i < n - 1; i++)
+      std::cin >> cities[i].w;
+
+    for (int i = 0; i < n; i++)
+      std::cin >> cities[i].g;
+
+    end = cities + n;
+    head = cities;
+    tail = cities;
+    start = cities;
+    finish = cities;
+    lastMinBackwardGasCity = cities;
+    firstMinBackwardGasCity = cities;
+
+    gifts = k;
+    gas = 0;
+    nextGas = 0;
+    maxL = 1;
+  }
 };
 
 struct Result
@@ -84,33 +124,33 @@ bool testInterval(int start, int finish, Data & data)
 
 int trueLen;
 int trueStart;
-int seed = -1;
+int seed = 0;
 
-void printData(Data & data, City * tail, City * head, City * start, City * finish, City * firstMinBackwardGasCity, City * lastMinBackwardGasCity, long long gas, long long nextGas, long long gifts)
+void printData(Data & data)
 {
   if(seed != -1)
     return;
 
   std::system("cls");
   std::cout << "True interval: " << trueStart << " - " << trueStart + trueLen - 1 << "\r\n";
-  std::cout << "Gas: " << gas << "\r\n";
-  std::cout << "NextGas: " << nextGas << "\r\n";
-  std::cout << "Gifts: " << gifts << "\r\n";
+  std::cout << "data.gas: " << data.gas << "\r\n";
+  std::cout << "data.nextGas: " << data.nextGas << "\r\n";
+  std::cout << "data.gifts: " << data.gifts << "\r\n";
 
   std::cout << "\r\n      ";
   for (int i = 0; i < data.n; i++)
   {
-    std::cout << ((i == tail - data.cities) ? "[" : " ");
+    std::cout << ((i == data.tail - data.cities) ? "[" : " ");
     std::cout << i;
-    std::cout << ((i == head - data.cities) ? "]" : " ");
+    std::cout << ((i == data.head - data.cities) ? "]" : " ");
   }
 
   std::cout << "\r\n     ";
   for (int i = 0; i < data.n; i++)
   {
     std::cout << " ";
-    std::cout << ((i == firstMinBackwardGasCity - data.cities) ? "<" : " ");
-    std::cout << ((i == lastMinBackwardGasCity - data.cities) ? ">" : " ");
+    std::cout << ((i == data.firstMinBackwardGasCity - data.cities) ? "<" : " ");
+    std::cout << ((i == data.lastMinBackwardGasCity - data.cities) ? ">" : " ");
   }
 
   std::cout << "\r\nW:   ";
@@ -137,307 +177,276 @@ void printData(Data & data, City * tail, City * head, City * start, City * finis
   for (int i = 0; i < data.n; i++)
   {
     std::cout << " ";
-    std::cout << ((i == start - data.cities) ? "s" : " ");
-    std::cout << ((i == finish - data.cities) ? "f" : " ");
+    std::cout << ((i == data.start - data.cities) ? "s" : " ");
+    std::cout << ((i == data.finish - data.cities) ? "f" : " ");
   }
 
   std::cout << "\r\n";
   getchar();
 }
 
-// TODO : удалить отладочный аргумент Data & data из лямбда функций
+// пересчет значений bg и minbg в конкретном городе, основываясь на значениях предыдущего города
+void backCount(City * city, Data & data)
+{
+  if (city == data.tail)
+  {
+    city->bg = city->minbg = 0;
+    data.firstMinBackwardGasCity = data.lastMinBackwardGasCity = data.tail;
+  }
+  else
+  {
+    city->bg = (city - 1)->bg + (city - 1)->w - city->g - city->gf;
+
+    if (city->bg < (city - 1)->minbg)
+    {
+      city->minbg = city->bg;
+      data.firstMinBackwardGasCity = city;
+      data.lastMinBackwardGasCity = city;
+    }
+    else if (city->bg == (city - 1)->minbg)
+    {
+      city->minbg = city->bg;
+      data.lastMinBackwardGasCity = city;
+    }
+    else
+      city->minbg = (city - 1)->minbg;
+  }
+};
+
+// пересчет значений bg и minbg во всех городах от хвоста до головы
+void backRecountAll(Data & data)
+{
+  for (City * city = data.tail; city < data.head; city++)
+    backCount(city, data);
+
+  printData(data);
+};
+
+// проверка возможности возврата к хвосту из конкретного города
+bool backCheck(City * city, long long gifts, Data & data)
+{
+  if (gifts + city->g >= (city - 1)->bg - (city - 1)->minbg + (city - 1)->w)
+  {
+    int l = city - data.tail + 1;
+
+    if (l > data.maxL)
+    {
+      data.maxL = l;
+      data.start = data.tail;
+      data.finish = city;
+      return true;
+    }
+  }
+
+  return false;
+};
+
+// проверка возможности возврата к хвосту со всех городов между хвостом и головой 
+void backCheckAll(Data & data)
+{
+  printData(data);
+
+  long long gifts_ = data.gifts;
+
+  for (City * city = data.head; city > max(data.tail, data.tail + data.maxL - 1); city--)
+  {
+    gifts_ += city->gf;
+
+    if (backCheck(city, gifts_, data))
+      break;
+  }
+};
+
 
 Result testData(Data & data)
 {
-  City * begin = data.cities;
-  City * end = data.cities + data.n;
-  City * head = begin;
-  City * tail = begin;
-  City * start = begin;
-  City * finish = begin;
-  City * lastMinBackwardGasCity = begin;
-  City * firstMinBackwardGasCity = begin;
-
-  int maxL = 1;
-  long long gifts = data.k;
-  long long gas = 0;
-  long long nextGas = 0;
-
-  // пересчет значений bg и minbg в конкретном городе, основываясь на значениях предыдущего города
-  auto backCount = [&](City * city, Data & data)
-  {
-    if (city == tail)
-    {
-      city->bg = city->minbg = 0;
-      firstMinBackwardGasCity = lastMinBackwardGasCity = tail;
-    }
-    else
-    {
-      city->bg = (city - 1)->bg + (city - 1)->w - city->g - city->gf;
-
-      if (city->bg < (city - 1)->minbg)
-      {
-        city->minbg = city->bg;
-        firstMinBackwardGasCity = city;
-        lastMinBackwardGasCity = city;
-      }
-      else if (city->bg == (city - 1)->minbg)
-      {
-        city->minbg = city->bg;
-        lastMinBackwardGasCity = city;
-      }
-      else
-        city->minbg = (city - 1)->minbg;
-    }
-  };
-
-  // пересчет значений bg и minbg во всех городах от хвоста до головы
-  auto backRecountAll = [&](Data & data)
-  {
-    for (City * city = tail; city < head; city++)
-      backCount(city, data);
-
-    printData(data, tail, head, start, finish, firstMinBackwardGasCity, lastMinBackwardGasCity, gas, nextGas, gifts);
-  };
-
-  // проверка возможности возврата к хвосту из конкретного города
-  auto backCheck = [&](City * city, long long gifts, Data & data) -> bool
-  {
-    if (gifts + city->g >= (city - 1)->bg - (city - 1)->minbg + (city - 1)->w)
-    {
-      int l = city - tail + 1;
-
-      if (l > maxL)
-      {
-        maxL = l;
-        start = tail;
-        finish = city;
-        return true;
-      }
-    }
-
-    return false;
-  };
-
-  // проверка возможности возврата к хвосту со всех городов между хвостом и головой 
-  auto backCheckAll = [&](Data & data)
-  {
-    printData(data, tail, head, start, finish, firstMinBackwardGasCity, lastMinBackwardGasCity, gas, nextGas, gifts);
-
-    long long gifts_ = gifts;
-
-    for (City * city = head; city > max(tail, tail + maxL - 1); city--)
-    {
-      gifts_ += city->gf;
-
-      if (backCheck(city, gifts_, data))
-        break;
-    }
-  };
-
   while (1)
   {
-    printData(data, tail, head, start, finish, firstMinBackwardGasCity, lastMinBackwardGasCity, gas, nextGas, gifts);
+    printData(data);
 
     // ==============
-    // PUSH HEAD LOOP
+    // PUSH data.head LOOP
     // ==============
-    while (head < end - 1)
+    while (data.head < data.end - 1)
     {
-      long long g = head->g;
-      long long w = head->w;
+      long long g = data.head->g;
+      long long w = data.head->w;
       long long gf = 0;
 
-      nextGas = (head == end - 1) ? LLONG_MIN : gas + g - w;
+      data.nextGas = (data.head == data.end - 1) ? LLONG_MIN : data.gas + g - w;
 
-      if (nextGas >= 0)
+      if (data.nextGas >= 0)
       {
-        gas = nextGas;
-        head->gf = gf = 0;
-        nextGas = 0;
+        data.gas = data.nextGas;
+        data.head->gf = gf = 0;
+        data.nextGas = 0;
       }
-      else if (gifts >= -nextGas)
+      else if (data.gifts >= -data.nextGas)
       {
-        head->gf = gf = -nextGas;
-        gifts += nextGas;
-        gas = 0;
-        nextGas = 0;
+        data.head->gf = gf = -data.nextGas;
+        data.gifts += data.nextGas;
+        data.gas = 0;
+        data.nextGas = 0;
       }
       else
         break;
 
-      backCount(head, data);
-      head++;
+      backCount(data.head, data);
+      data.head++;
 
-      backCheck(head, gifts, data);
+      backCheck(data.head, data.gifts, data);
     }
 
-    printData(data, tail, head, start, finish, firstMinBackwardGasCity, lastMinBackwardGasCity, gas, nextGas, gifts);
+    printData(data);
 
     // ==============
-    // PULL TAIL LOOP
+    // PULL data.tail LOOP
     // ==============
-    while (tail < head)
+    while (data.tail < data.head)
     {
       // если всего исходного кол-ва подарков недостаточно для преодоления текущей дороги
       // и подтягивать хвост более нет смысла, или все гифты собраны, то выходим
-      if (data.k < -nextGas && head - tail + 1 <= maxL)
+      if (data.k < -data.nextGas && data.head - data.tail + 1 <= data.maxL)
         break;
 
-      bool needBackwardRecheck = false;
-
-      if (tail->gf)
+      if (data.head - data.tail + 1 <= data.maxL)
       {
-        needBackwardRecheck = false;
-        gifts += tail->gf;
-        tail->gf = 0;
-        tail++;
+        while (!data.tail->gf)
+          data.tail++;
+      }
+
+      if (data.tail->gf)
+      {
+        data.gifts += data.tail->gf;
+        data.tail->gf = 0;
+        data.tail++;
         backCheckAll(data);
 
-        printData(data, tail, head, start, finish, firstMinBackwardGasCity, lastMinBackwardGasCity, gas, nextGas, gifts);
+        printData(data);
       }
       else
       {
-        tail++;
+        data.tail++;
+
         long long gas_ = 0;
+        bool gasChanged = true;
 
         // необходимо оптимизировать
-        for (City * city = tail; city < head; city++)
+        for (City * city = data.tail; city < data.head; city++)
         {
           gas_ += city->g + city->gf - city->w;
 
-          if (gas_ < 0)
+          if (gas_ <= 0 && city->gf)
           {
-            gifts += gas_;
-
-            if (city->gf)
-            {
-              city->gf -= gas_;
-              gas_ = 0;
-            }
-            else
-            {
-              city->gf = -gas_;
-              gas_ = 0;
-            }
+            data.gifts += gas_;
+            city->gf -= gas_;
+            gas_ = 0;
+            gasChanged = false;
+            break;
+          }
+          else if (gas_ < 0)
+          {
+            data.gifts += gas_;
+            city->gf = -gas_;
+            gas_ = 0;
           }
         }
 
-        gas = gas_;
+        if (gasChanged)
+          data.gas = gas_;
 
-        if(gifts < 0)
-          printData(data, tail, head, start, finish, firstMinBackwardGasCity, lastMinBackwardGasCity, gas, nextGas, gifts);
+        if(data.gifts < 0)
+          printData(data);
 
         // возвращаем голову назад, компенсируя отрицательное кол-во подарков
-        while (gifts < 0)
+        while (data.gifts < 0)
         {
-          head--;
-          gas -= head->g + head->gf - head->w;
-          gifts += head->gf;
-          head->gf = 0;
-          head->bg = 0;
-          head->minbg = 0;
+          data.head--;
+          data.gas -= data.head->g + data.head->gf - data.head->w;
+          data.gifts += data.head->gf;
+          data.head->gf = 0;
+          data.head->bg = 0;
+          data.head->minbg = 0;
         }
 
-        nextGas = gas + head->g - head->w;
+        data.nextGas = data.gas + data.head->g - data.head->w;
 
-        if (head <= firstMinBackwardGasCity)
+        if (data.head <= data.firstMinBackwardGasCity)
         {
-          printData(data, tail, head, start, finish, firstMinBackwardGasCity, lastMinBackwardGasCity, gas, nextGas, gifts);
+          printData(data);
           // если голова вернулась раньше первого города, с минимальным количеством топлива на обратном пути, то далее 
           // необходим пересчет для каждого города city->bg и city->minbg, а также backwardGas и minBackwardGas
-          needBackwardRecheck = false;
           backRecountAll(data);
           backCheckAll(data);
         }
-        else if (head <= lastMinBackwardGasCity)
-          while (lastMinBackwardGasCity->bg != lastMinBackwardGasCity->minbg)
-            lastMinBackwardGasCity--;
+        else if (data.head <= data.lastMinBackwardGasCity)
+          while (data.lastMinBackwardGasCity->bg != data.lastMinBackwardGasCity->minbg)
+            data.lastMinBackwardGasCity--;
 
-        printData(data, tail, head, start, finish, firstMinBackwardGasCity, lastMinBackwardGasCity, gas, nextGas, gifts);
+        printData(data);
       }
 
-      if (tail == head)
+      if (data.tail == data.head)
         break;
 
-      if (tail > lastMinBackwardGasCity)
+      if (data.tail > data.lastMinBackwardGasCity)
       {
         // если хвост покинул последний город, имеющий минимальное количество топлива на обратном пути, то далее 
         // необходим пересчет для каждого города city->bg и city->minbg, а также backwardGas и minBackwardGas
-        needBackwardRecheck = false;
         backRecountAll(data);
         backCheckAll(data);
-        printData(data, tail, head, start, finish, firstMinBackwardGasCity, lastMinBackwardGasCity, gas, nextGas, gifts);
+        printData(data);
       }
-      else if (tail > firstMinBackwardGasCity)
-        while (firstMinBackwardGasCity->bg != firstMinBackwardGasCity->minbg)
-          firstMinBackwardGasCity++;
+      else if (data.tail > data.firstMinBackwardGasCity)
+        while (data.firstMinBackwardGasCity->bg != data.firstMinBackwardGasCity->minbg)
+          data.firstMinBackwardGasCity++;
 
-      if(needBackwardRecheck)
+      printData(data);
+
+      if (data.head == data.end - 1)
       {
-        backCheckAll(data);
-      }
-
-      printData(data, tail, head, start, finish, firstMinBackwardGasCity, lastMinBackwardGasCity, gas, nextGas, gifts);
-
-      if (head == end - 1)
-      {
-        if (maxL >= head - tail + 1)
+        if (data.maxL >= data.head - data.tail + 1)
           break;
       }
-      else if (gifts >= -nextGas)
+      else if (data.gifts >= -data.nextGas)
       {
-        head->gf = -nextGas;
-        gifts -= -nextGas;
-        gas = 0;
-        nextGas = 0;
-        backCount(head, data);
-        printData(data, tail, head, start, finish, firstMinBackwardGasCity, lastMinBackwardGasCity, gas, nextGas, gifts);
-        head++;
-        backCheck(head, gifts, data);
+        data.head->gf = -data.nextGas;
+        data.gifts -= -data.nextGas;
+        data.gas = 0;
+        data.nextGas = 0;
+        backCount(data.head, data);
+        printData(data);
+        data.head++;
+        backCheck(data.head, data.gifts, data);
         break;
       }
     }
 
-    if (data.k < -nextGas && head - tail + 1 <= maxL)
+    if (data.k < -data.nextGas && data.head - data.tail + 1 <= data.maxL)
     {
-      head++;
-      tail = head;
+      data.head++;
+      data.tail = data.head;
     }
 
-    if (tail == head)
+    if (data.tail == data.head)
     {
-      begin = head;
-      tail = head;
-      firstMinBackwardGasCity = head;
-      lastMinBackwardGasCity = head;
-      gifts = data.k;
-      gas = 0;
-      nextGas = 0;
-
-      printData(data, tail, head, start, finish, firstMinBackwardGasCity, lastMinBackwardGasCity, gas, nextGas, gifts);
+      data.tail = data.head;
+      data.firstMinBackwardGasCity = data.head;
+      data.lastMinBackwardGasCity = data.head;
+      data.gifts = data.k;
+      data.gas = 0;
+      data.nextGas = 0;
+      printData(data);
     }
 
-    if (maxL >= end - tail)
+    if (data.maxL >= data.end - data.tail)
     {
-      printData(data, tail, head, start, finish, firstMinBackwardGasCity, lastMinBackwardGasCity, gas, nextGas, gifts);
+      printData(data);
       break;
     }
   }
 
-  return { start, finish };
-}
-
-void init(Data * data)
-{
-  std::cin >> data->n >> data->k;
-
-  for (int i = 0; i < data->n - 1; i++)
-    std::cin >> data->cities[i].w;
-
-  for (int i = 0; i < data->n; i++)
-    std::cin >> data->cities[i].g;
-
+  return { data.start, data.finish };
 }
 
 void clean(Data * data)
@@ -453,39 +462,37 @@ void clean(Data * data)
 int test()
 {
   static Data data;
-  init(&data);
-  clean(&data);
+  data.init();
 
-  for (trueLen = data.n; trueLen > 0; trueLen--)
+  if (data.n < 10000)
   {
-    for (trueStart = 0; trueStart <= data.n - trueLen; trueStart++)
+    for (trueLen = data.n; trueLen > 0; trueLen--)
     {
-      if (testInterval(trueStart, trueStart + trueLen - 1, data))
-        goto end;
+      for (trueStart = 0; trueStart <= data.n - trueLen; trueStart++)
+      {
+        if (testInterval(trueStart, trueStart + trueLen - 1, data))
+          goto end;
+      }
     }
-  }
-end:
+  end:
 
-  clean(&data);
+    clean(&data);
+  }
 
   Result result = testData(data);
 
-  if (trueLen != result.finish - result.start + 1)
+  if (data.n < 10000)
   {
-    std::cout << "Seed: " << seed;
-    std::cout << " Control result: " << trueLen << "(" << trueStart << "-" << trueStart + trueLen - 1 << ") ";
-    std::cout << " ERROR: " << result.finish - result.start + 1 << "(" << result.start - data.cities << "-" << result.finish - data.cities << ") ";
-    getchar();
+    if (trueLen != result.finish - result.start + 1)
+    {
+      std::cout << "Seed: " << seed;
+      std::cout << " Control result: " << trueLen << "(" << trueStart << "-" << trueStart + trueLen - 1 << ") ";
+      std::cout << " ERROR: " << result.finish - result.start + 1 << "(" << result.start - data.cities << "-" << result.finish - data.cities << ") ";
+      getchar();
+    }
   }
 
-
-  //else
-  //  std::cout << " OK: " << result.finish - result.start + 1 << "(" << result.start - data.cities << "-" << result.finish - data.cities << ") ";
-
-  //if (!testInterval(result.start - data.cities, result.finish - data.cities, data))
-  //  std::cout << " WRONG: (" << result.start - data.cities << "-" << result.finish - data.cities << ") ";
-
-  return result.finish - result.start + 1;
+  return result.length();
 }
 
 int main()
@@ -549,6 +556,7 @@ int main()
 
   //208 2010
   //Last test result : 1803  
+  /*
   srand(9873);
 
   for (seed = 0; seed < 10000; seed++)
@@ -559,20 +567,20 @@ int main()
     srand(seed);
     rand();
     int n = 2 + rand() % 1000;
-    int k = rand() % 10000;
+    int k = rand() % 1000;
     std::stringstream oss;
     oss << n << " " << k << " ";
 
     for (int i = 0; i < n - 1; i++)
     {
-      long long a = rand() % 10;
+      long long a = rand() % 100;// % 1000000000;
       long long b = 1;// rand() % 3000;
       oss << a * b << " ";
     }
 
     for (int i = 0; i < n; i++)
     {
-      long long a = rand() % 10;
+      long long a = rand() % 50;// % 1000000000;
       long long b = 1;// rand() % 2870;
       long long c = 1;// rand() % 4;
       oss << a * b * c << " ";
@@ -582,40 +590,42 @@ int main()
     std::cin.rdbuf(iss.rdbuf());
 
     int len = test();
-    //std::cout << " Result: " << len << "\r\n";
   }
+  std::cout << "\r\n";
+  */
 
-/*
   srand(2389);
 
   int n = 100000;
   int k = 1000000000;
   std::stringstream oss;
-  oss << n << " " << k << "\r\n";
+  oss << n << " " << k << " ";
 
   for (int i = 0; i < n - 1; i++)
   {
-    long long a = 1;
-    long long b = rand() % 100000;
-    oss << a * b << (i < n - 2 ? " " : "\r\n");
+    long long a = i * 250;
+    long long b = 1;// rand() % 3;
+    oss << a * b << " ";
   }
 
   for (int i = 0; i < n; i++)
   {
-    long long a = 1;
-    long long b = rand() % 500;
+    long long a = 10000000 - i * 100;
+    long long b = 1;// rand() % 100;
     long long c = 1;// rand() % 4;
-    oss << a * b * c << (i < n - 1 ? " " : "\r\n");
+    oss << a * b * c << " ";
   }
 
   iss.str(oss.str());
   std::cin.rdbuf(iss.rdbuf());
 
   clock_t t = clock();
-  std::cout << "Last test result: " << test() << "\r\n";
+  std::cout << "Control result: 30963\r\n";
+  std::cout << "Control time: 3365\r\n";
+  std::cout << "Test result: " << test() << "\r\n";
   t = clock() - t;
   std::cout << "Time: " << t << " ms";
-*/
+
 
   std::cout << "\r\nPress 'Enter' to exit\r\n";
   getchar();
