@@ -4,7 +4,8 @@
 #include <ctime>
 #include <string.h>
 
-#define LLONG_MIN (-9223372036854775807LL - 1)  // minimum signed long long int value
+#define LLONG_MIN (-9223372036854775807LL - 1)
+#define LLONG_MAX 9223372036854775807LL
 #define min(a, b) (((a) < (b)) ? (a) : (b))
 #define max(a, b) (((a) > (b)) ? (a) : (b))
 #define MAX_CITY_COUNT 100000
@@ -242,26 +243,48 @@ bool backCheck(City * city, long long gifts, Data & data)
 };
 
 // проверка возможности возврата к хвосту со всех городов между хвостом и головой 
-void backCheckAll(Data & data)
+long long backCheckAll(Data & data)
 {
   printData(data);
 
   long long gifts_ = data.gifts;
+  long long minGiftsDeficit = LLONG_MAX;
 
   for (City * city = data.head; city > max(data.tail, data.tail + data.maxL - 1); city--)
   {
     gifts_ += city->gf;
 
-    if (backCheck(city, gifts_, data))
+    long long giftsLeft = gifts_ + city->g - (city - 1)->w - ((city - 1)->bg - (city - 1)->minbg);
+
+    if (giftsLeft >= 0)
+    {
+      data.maxL = city - data.tail + 1;
+      data.start = data.tail;
+      data.finish = city;
       break;
+    }
+    else
+      minGiftsDeficit = min(minGiftsDeficit, -giftsLeft);
   }
+
+  return minGiftsDeficit;
 };
 
 
 Result testData(Data & data)
 {
-  while (1)
+  while (data.end - data.tail > data.maxL)
   {
+    if (data.tail == data.head)
+    {
+      data.firstMinBackwardGasCity = data.head;
+      data.lastMinBackwardGasCity = data.head;
+      data.gifts = data.k;
+      data.gas = 0;
+      data.nextGas = 0;
+      printData(data);
+    }
+
     printData(data);
 
     // ==============
@@ -302,32 +325,39 @@ Result testData(Data & data)
     // ==============
     // PULL data.tail LOOP
     // ==============
+    long long minGiftsDeficit = 0;
+
     while (data.tail < data.head)
     {
       // если всего исходного кол-ва подарков недостаточно для преодоления текущей дороги
-      // и подтягивать хвост более нет смысла, или все гифты собраны, то выходим
+      // и подтягивать хвост более нет смысла, то выходим
       if (data.k < -data.nextGas && data.head - data.tail + 1 <= data.maxL)
         break;
 
       if (data.head - data.tail + 1 <= data.maxL)
       {
-        while (!data.tail->gf)
+        while (!data.tail->gf && data.tail < data.head)
           data.tail++;
       }
 
-      if (data.tail->gf)
+      while (!data.tail->gf && data.tail->w <= (data.tail + 1)->g && data.tail < data.head)
+        data.tail++;
+
+      if (long long tailGifts = data.tail->gf)
       {
-        data.gifts += data.tail->gf;
+        data.gifts += tailGifts;
         data.tail->gf = 0;
         data.tail++;
-        backCheckAll(data);
+        minGiftsDeficit -= tailGifts;
+
+        if(minGiftsDeficit <= 0)
+          minGiftsDeficit = backCheckAll(data);
 
         printData(data);
       }
       else
       {
         data.tail++;
-
         long long gas_ = 0;
         bool gasChanged = true;
 
@@ -367,6 +397,7 @@ Result testData(Data & data)
           data.head->gf = 0;
           data.head->bg = 0;
           data.head->minbg = 0;
+          minGiftsDeficit = 0;
         }
 
         data.nextGas = data.gas + data.head->g - data.head->w;
@@ -375,9 +406,9 @@ Result testData(Data & data)
         {
           printData(data);
           // если голова вернулась раньше первого города, с минимальным количеством топлива на обратном пути, то далее 
-          // необходим пересчет для каждого города city->bg и city->minbg, а также backwardGas и minBackwardGas
+          // необходим пересчет для каждого города city->bg и city->minbg
           backRecountAll(data);
-          backCheckAll(data);
+          minGiftsDeficit = backCheckAll(data);
         }
         else if (data.head <= data.lastMinBackwardGasCity)
           while (data.lastMinBackwardGasCity->bg != data.lastMinBackwardGasCity->minbg)
@@ -392,9 +423,9 @@ Result testData(Data & data)
       if (data.tail > data.lastMinBackwardGasCity)
       {
         // если хвост покинул последний город, имеющий минимальное количество топлива на обратном пути, то далее 
-        // необходим пересчет для каждого города city->bg и city->minbg, а также backwardGas и minBackwardGas
+        // необходим пересчет для каждого города city->bg и city->minbg
         backRecountAll(data);
-        backCheckAll(data);
+        minGiftsDeficit = backCheckAll(data);
         printData(data);
       }
       else if (data.tail > data.firstMinBackwardGasCity)
@@ -423,27 +454,7 @@ Result testData(Data & data)
     }
 
     if (data.k < -data.nextGas && data.head - data.tail + 1 <= data.maxL)
-    {
-      data.head++;
-      data.tail = data.head;
-    }
-
-    if (data.tail == data.head)
-    {
-      data.tail = data.head;
-      data.firstMinBackwardGasCity = data.head;
-      data.lastMinBackwardGasCity = data.head;
-      data.gifts = data.k;
-      data.gas = 0;
-      data.nextGas = 0;
-      printData(data);
-    }
-
-    if (data.maxL >= data.end - data.tail)
-    {
-      printData(data);
-      break;
-    }
+      data.tail = ++data.head;
   }
 
   return { data.start, data.finish };
@@ -485,7 +496,7 @@ int test()
   {
     if (trueLen != result.finish - result.start + 1)
     {
-      std::cout << "Seed: " << seed;
+      std::cout << "\rSeed: " << seed;
       std::cout << " Control result: " << trueLen << "(" << trueStart << "-" << trueStart + trueLen - 1 << ") ";
       std::cout << " ERROR: " << result.finish - result.start + 1 << "(" << result.start - data.cities << "-" << result.finish - data.cities << ") ";
       getchar();
@@ -559,7 +570,7 @@ int main()
   /*
   srand(9873);
 
-  for (seed = 0; seed < 10000; seed++)
+  for (seed = 1600; seed < 10000; seed++)
   {
     if (!(seed % 10))
       std::cout << "\rTests: " << seed;
@@ -603,14 +614,14 @@ int main()
 
   for (int i = 0; i < n - 1; i++)
   {
-    long long a = i * 250;
+    long long a = 1000000 * sin(i / 10000.0f);
     long long b = 1;// rand() % 3;
     oss << a * b << " ";
   }
 
   for (int i = 0; i < n; i++)
   {
-    long long a = 10000000 - i * 100;
+    long long a = 1;
     long long b = 1;// rand() % 100;
     long long c = 1;// rand() % 4;
     oss << a * b * c << " ";
@@ -620,8 +631,8 @@ int main()
   std::cin.rdbuf(iss.rdbuf());
 
   clock_t t = clock();
-  std::cout << "Control result: 30963\r\n";
-  std::cout << "Control time: 3365\r\n";
+  std::cout << "Control result: 37768\r\n";
+  std::cout << "Control time: 1737 / 512\r\n";
   std::cout << "Test result: " << test() << "\r\n";
   t = clock() - t;
   std::cout << "Time: " << t << " ms";
