@@ -4,6 +4,8 @@
 #include <ctime>
 #include <string.h>
 
+#undef LLONG_MIN 
+#undef LLONG_MAX 
 #define LLONG_MIN (-9223372036854775807LL - 1)
 #define LLONG_MAX 9223372036854775807LL
 #define min(a, b) (((a) < (b)) ? (a) : (b))
@@ -41,6 +43,35 @@ public:
   {
     memset(cities, 0, sizeof(cities));
 
+    std::streambuf * sbuf = std::cin.rdbuf();
+
+    auto getCinValue = [=]() -> long long
+    {
+      long long retVal = 0;
+      int ch = ' ';
+
+      while (ch == ' ' || ch == '\r' || ch == '\n')
+        ch = sbuf->sbumpc();
+
+      while (ch >= '0' && ch <= '9')
+      {
+        retVal = retVal * 10 + ch - '0';
+        ch = sbuf->sbumpc();
+      }
+
+      return retVal;
+    };
+
+    n = getCinValue();
+    k = getCinValue();
+
+    for (int i = 0; i < n - 1; i++)
+      cities[i].w = getCinValue();
+
+    for (int i = 0; i < n; i++)
+      cities[i].g = getCinValue();
+
+    /*
     std::cin >> n >> k;
 
     for (int i = 0; i < n - 1; i++)
@@ -48,6 +79,7 @@ public:
 
     for (int i = 0; i < n; i++)
       std::cin >> cities[i].g;
+    */
 
     end = cities + n;
     head = cities;
@@ -74,7 +106,6 @@ struct Result
 bool testInterval(int start, int finish, Data & data)
 {
   bool retVal = false;
-  static long long g_[100000];
   long long gas = 0;
   long long gifts = data.k;
   int i;
@@ -614,7 +645,7 @@ int main()
 
   for (int i = 0; i < n - 1; i++)
   {
-    long long a = 1000000 * sin(i / 10000.0f);
+    long long a = (long long)(1000000 * (0.5f + 0.5f * sin(i / 10000.0f)));
     long long b = 1;// rand() % 3;
     oss << a * b << " ";
   }
@@ -631,8 +662,8 @@ int main()
   std::cin.rdbuf(iss.rdbuf());
 
   clock_t t = clock();
-  std::cout << "Control result: 37768\r\n";
-  std::cout << "Control time: 1737 / 512\r\n";
+  std::cout << "Control result: 17075\r\n";
+  std::cout << "Control time: 1920 / 340\r\n";
   std::cout << "Test result: " << test() << "\r\n";
   t = clock() - t;
   std::cout << "Time: " << t << " ms";
