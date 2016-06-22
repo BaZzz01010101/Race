@@ -10,7 +10,23 @@
 #define LLONG_MAX 9223372036854775807LL
 #define min(a, b) (((a) < (b)) ? (a) : (b))
 #define max(a, b) (((a) > (b)) ? (a) : (b))
-#define MAX_CITY_COUNT 100000
+#define MAX_CITY_COUNT 1000000
+
+#define DEBUG_MODE
+
+#ifdef DEBUG_MODE
+
+struct Test
+{
+  const char * in;
+  int out;
+};
+
+int trueLen;
+int trueStart;
+int seed = 0;
+
+#endif
 
 struct City
 {
@@ -62,24 +78,14 @@ public:
       return retVal;
     };
 
-    n = getCinValue();
-    k = getCinValue();
+    n = (int)getCinValue();
+    k = (int)getCinValue();
 
     for (int i = 0; i < n - 1; i++)
       cities[i].w = getCinValue();
 
     for (int i = 0; i < n; i++)
       cities[i].g = getCinValue();
-
-    /*
-    std::cin >> n >> k;
-
-    for (int i = 0; i < n - 1; i++)
-      std::cin >> cities[i].w;
-
-    for (int i = 0; i < n; i++)
-      std::cin >> cities[i].g;
-    */
 
     end = cities + n;
     head = cities;
@@ -88,7 +94,6 @@ public:
     finish = cities;
     lastMinBackwardGasCity = cities;
     firstMinBackwardGasCity = cities;
-
     gifts = k;
     gas = 0;
     nextGas = 0;
@@ -102,6 +107,8 @@ struct Result
   City * finish;
   int length() { return finish - start + 1; }
 };
+
+#ifdef DEBUG_MODE
 
 bool testInterval(int start, int finish, Data & data)
 {
@@ -153,10 +160,6 @@ bool testInterval(int start, int finish, Data & data)
 
   return false;
 }
-
-int trueLen;
-int trueStart;
-int seed = 0;
 
 void printData(Data & data)
 {
@@ -217,7 +220,9 @@ void printData(Data & data)
   getchar();
 }
 
-// пересчет значений bg и minbg в конкретном городе, основываясь на значениях предыдущего города
+#endif
+
+// count city's bg and minbg from previous city values
 void backCount(City * city, Data & data)
 {
   if (city == data.tail)
@@ -245,16 +250,18 @@ void backCount(City * city, Data & data)
   }
 };
 
-// пересчет значений bg и minbg во всех городах от хвоста до головы
+// recount bg and minbg values for all cities from the tail to the head
 void backRecountAll(Data & data)
 {
   for (City * city = data.tail; city < data.head; city++)
     backCount(city, data);
 
+#ifdef DEBUG_MODE
   printData(data);
+#endif
 };
 
-// проверка возможности возврата к хвосту из конкретного города
+// check return possibility from the city to the tail city
 bool backCheck(City * city, long long gifts, Data & data)
 {
   if (gifts + city->g >= (city - 1)->bg - (city - 1)->minbg + (city - 1)->w)
@@ -273,10 +280,12 @@ bool backCheck(City * city, long long gifts, Data & data)
   return false;
 };
 
-// проверка возможности возврата к хвосту со всех городов между хвостом и головой 
+// check return possibility to the tail city from all cities between the tail and head
 long long backCheckAll(Data & data)
 {
+#ifdef DEBUG_MODE
   printData(data);
+#endif
 
   long long gifts_ = data.gifts;
   long long minGiftsDeficit = LLONG_MAX;
@@ -313,14 +322,17 @@ Result testData(Data & data)
       data.gifts = data.k;
       data.gas = 0;
       data.nextGas = 0;
+
+#ifdef DEBUG_MODE
       printData(data);
+#endif
     }
 
+#ifdef DEBUG_MODE
     printData(data);
+#endif
 
-    // ==============
-    // PUSH data.head LOOP
-    // ==============
+    // head pushing loop
     while (data.head < data.end - 1)
     {
       long long g = data.head->g;
@@ -351,17 +363,17 @@ Result testData(Data & data)
       backCheck(data.head, data.gifts, data);
     }
 
+#ifdef DEBUG_MODE
     printData(data);
+#endif
 
-    // ==============
-    // PULL data.tail LOOP
-    // ==============
+    // tail pulling loop
     long long minGiftsDeficit = 0;
 
     while (data.tail < data.head)
     {
-      // если всего исходного кол-ва подарков недостаточно для преодоления текущей дороги
-      // и подтягивать хвост более нет смысла, то выходим
+      // if all initial gifts number is insufficient to push head to the next city and 
+      // no sense to pull the tail, because we already have longer run, then exit loop
       if (data.k < -data.nextGas && data.head - data.tail + 1 <= data.maxL)
         break;
 
@@ -384,7 +396,9 @@ Result testData(Data & data)
         if(minGiftsDeficit <= 0)
           minGiftsDeficit = backCheckAll(data);
 
+#ifdef DEBUG_MODE
         printData(data);
+#endif
       }
       else
       {
@@ -392,7 +406,9 @@ Result testData(Data & data)
         long long gas_ = 0;
         bool gasChanged = true;
 
-        // необходимо оптимизировать
+        // TODO : bottleneck, have to optimize
+        // recount gifts and gas left
+        // gifts number may becomes negative
         for (City * city = data.tail; city < data.head; city++)
         {
           gas_ += city->g + city->gf - city->w;
@@ -416,10 +432,12 @@ Result testData(Data & data)
         if (gasChanged)
           data.gas = gas_;
 
+#ifdef DEBUG_MODE
         if(data.gifts < 0)
           printData(data);
+#endif
 
-        // возвращаем голову назад, компенсируя отрицательное кол-во подарков
+        // pull back head to compensate negative gifts number
         while (data.gifts < 0)
         {
           data.head--;
@@ -433,11 +451,15 @@ Result testData(Data & data)
 
         data.nextGas = data.gas + data.head->g - data.head->w;
 
+        // if head returns before the first city with (city->bg == city->minbg) then have to recount 
+        // all city->bg and city->minbg values for all cities between tail and head
+        // else if head returns before the last city with (city->bg == city->minbg) then have to find
+        // new lastMinBackwardGasCity
         if (data.head <= data.firstMinBackwardGasCity)
         {
+#ifdef DEBUG_MODE
           printData(data);
-          // если голова вернулась раньше первого города, с минимальным количеством топлива на обратном пути, то далее 
-          // необходим пересчет для каждого города city->bg и city->minbg
+#endif
           backRecountAll(data);
           minGiftsDeficit = backCheckAll(data);
         }
@@ -445,25 +467,32 @@ Result testData(Data & data)
           while (data.lastMinBackwardGasCity->bg != data.lastMinBackwardGasCity->minbg)
             data.lastMinBackwardGasCity--;
 
+#ifdef DEBUG_MODE
         printData(data);
+#endif
       }
 
       if (data.tail == data.head)
         break;
 
+      // if tail passed lastMinBackwardGasCity, then have to recount city->bg и city->minbg for all cities 
+      // between the tail and head
       if (data.tail > data.lastMinBackwardGasCity)
       {
-        // если хвост покинул последний город, имеющий минимальное количество топлива на обратном пути, то далее 
-        // необходим пересчет для каждого города city->bg и city->minbg
         backRecountAll(data);
         minGiftsDeficit = backCheckAll(data);
+
+#ifdef DEBUG_MODE
         printData(data);
+#endif
       }
       else if (data.tail > data.firstMinBackwardGasCity)
         while (data.firstMinBackwardGasCity->bg != data.firstMinBackwardGasCity->minbg)
           data.firstMinBackwardGasCity++;
 
+#ifdef DEBUG_MODE
       printData(data);
+#endif
 
       if (data.head == data.end - 1)
       {
@@ -477,7 +506,10 @@ Result testData(Data & data)
         data.gas = 0;
         data.nextGas = 0;
         backCount(data.head, data);
+
+#ifdef DEBUG_MODE
         printData(data);
+#endif
         data.head++;
         backCheck(data.head, data.gifts, data);
         break;
@@ -506,6 +538,8 @@ int test()
   static Data data;
   data.init();
 
+#ifdef DEBUG_MODE
+
   if (data.n < 10000)
   {
     for (trueLen = data.n; trueLen > 0; trueLen--)
@@ -521,7 +555,11 @@ int test()
     clean(&data);
   }
 
+#endif
+
   Result result = testData(data);
+
+#ifdef DEBUG_MODE
 
   if (data.n < 10000)
   {
@@ -534,110 +572,74 @@ int test()
     }
   }
 
+#endif
+
   return result.length();
 }
 
 int main()
 {
+#ifdef DEBUG_MODE
+
   std::istringstream iss;
 
-  //std::cout << "Test 1: ";
-  //iss.str("2 0 "
-  //        "2 "
-  //        "1 1 ");
-  //std::cin.rdbuf(iss.rdbuf());
-  //std::cout << (test() == 1 ? "complete" : "failed") << "\r\n";
-
-  //std::cout << "Test 2: ";
-  //iss.str("3 1 "
-  //        "2 2 "
-  //        "1 1 1 ");
-  //std::cin.rdbuf(iss.rdbuf());
-  //std::cout << (test() == 1 ? "complete" : "failed") << "\r\n";
-
-  //std::cout << "Test 3: ";
-  //iss.str("3 0 "
-  //        "1 2 "
-  //        "1 1 1 ");  //std::cin.rdbuf(iss.rdbuf());
-  //std::cout << (test() == 2 ? "complete" : "failed") << "\r\n";
-
-  //std::cout << "Test 4: ";
-  //iss.str("4 4 "
-  //        "2 2 2 "
-  //        "1 1 1 1 ");
-  //std::cin.rdbuf(iss.rdbuf());
-  //std::cout << (test() == 4 ? "complete" : "failed") << "\r\n";
-
-  //std::cout << "Test 5: ";
-  //iss.str("8 5 "
-  //        "2 2 2 3 7 3 1 "
-  //        "1 3 1 5 4 0 2 5 ");
-  //std::cin.rdbuf(iss.rdbuf());
-  //std::cout << (test() == 7 ? "complete" : "failed") << "\r\n";
-
-  //std::cout << "Test 6: ";
-  //iss.str("15 10 "
-  //        "4 1 30 23 32 37 26 18 41 38 6 38 23 40 "
-  //        "5 7 6 7 8 15 1 11 16 7 3 20 20 9 1 ");
-  //std::cin.rdbuf(iss.rdbuf());
-  //std::cout << (test() == 3 ? "complete" : "failed") << "\r\n";
-
-  //std::cout << "Test 7: ";
-  //iss.str("20 100 "
-  //        "2 28 35 16 40 25 50 36 35 47 25 5 34 26 22 49 26 7 10 "
-  //        "12 12 13 8 8 19 18 9 0 18 13 20 9 10 0 7 5 6 15 2 ");
-  //std::cin.rdbuf(iss.rdbuf());
-  //std::cout << (test() == 7 ? "complete" : "failed") << "\r\n";
-
-  //std::cout << "Test 8: ";
-  //iss.str("50 100 "
-  //        "21 49 12 29 5 28 1 18 8 32 9 46 36 40 10 44 9 12 22 34 45 24 14 39 34 29 50 36 31 7 14 7 33 16 20 44 36 38 21 1 36 6 26 9 39 18 40 32 49 "
-  //        "16 8 1 19 3 1 16 13 11 15 18 16 16 7 15 12 9 14 20 4 6 13 2 13 2 5 20 16 12 4 3 14 20 20 3 19 15 13 10 6 4 7 0 8 4 5 9 12 1 16 ");
-  //std::cin.rdbuf(iss.rdbuf());
-  //std::cout << (test() == 10 ? "complete" : "failed") << "\r\n";
-
-  //208 2010
-  //Last test result : 1803  
-  /*
-  srand(9873);
-
-  for (seed = 1600; seed < 10000; seed++)
+  static Test tests[] =
   {
-    if (!(seed % 10))
-      std::cout << "\rTests: " << seed;
-
-    srand(seed);
-    rand();
-    int n = 2 + rand() % 1000;
-    int k = rand() % 1000;
-    std::stringstream oss;
-    oss << n << " " << k << " ";
-
-    for (int i = 0; i < n - 1; i++)
     {
-      long long a = rand() % 100;// % 1000000000;
-      long long b = 1;// rand() % 3000;
-      oss << a * b << " ";
-    }
-
-    for (int i = 0; i < n; i++)
+      "2 0 "
+      "2 "
+      "1 1 ", 1
+    },
     {
-      long long a = rand() % 50;// % 1000000000;
-      long long b = 1;// rand() % 2870;
-      long long c = 1;// rand() % 4;
-      oss << a * b * c << " ";
+      "3 1 "
+      "2 2 "
+      "1 1 1 ", 1
+    },
+    {
+      "3 0 "
+      "1 2 "
+      "1 1 1 ", 2    },    {      "4 4 "
+      "2 2 2 "
+      "1 1 1 1 ", 4
+    },
+    {
+      "8 5 "
+      "2 2 2 3 7 3 1 "
+      "1 3 1 5 4 0 2 5 ", 7
+    },
+    {
+      "15 10 "
+      "4 1 30 23 32 37 26 18 41 38 6 38 23 40 "
+      "5 7 6 7 8 15 1 11 16 7 3 20 20 9 1 ", 3
+    },
+    {
+      "20 100 "
+      "2 28 35 16 40 25 50 36 35 47 25 5 34 26 22 49 26 7 10 "
+      "12 12 13 8 8 19 18 9 0 18 13 20 9 10 0 7 5 6 15 2 ", 7
+    },
+    {
+      "50 100 "
+      "21 49 12 29 5 28 1 18 8 32 9 46 36 40 10 44 9 12 22 34 45 24 14 39 34 29 50 36 31 7 14 7 33 16 20 44 36 38 21 1 36 6 26 9 39 18 40 32 49 "
+      "16 8 1 19 3 1 16 13 11 15 18 16 16 7 15 12 9 14 20 4 6 13 2 13 2 5 20 16 12 4 3 14 20 20 3 19 15 13 10 6 4 7 0 8 4 5 9 12 1 16 ", 10
     }
+  };
 
-    iss.str(oss.str());
+  for (int t = 0; t < sizeof(tests) / sizeof(tests[0]); t++)
+  {
+    std::cout << "Test " << t << ": ";
+    iss.str(tests[t].in);
     std::cin.rdbuf(iss.rdbuf());
-
-    int len = test();
+    std::cout << (test() == tests[t].out ? "complete" : "failed") << "\r\n";
   }
+
   std::cout << "\r\n";
-  */
+  std::cout << "Main test:\r\n";
+  std::cout << "City count: 100 000\r\n";
+  std::cout << "Gift count: 1 000 000 000\r\n";
+  std::cout << "Control result: 44464\r\n";
+  std::cout << "Control time(release): 1215ms\r\n";
 
   srand(2389);
-
   int n = 100000;
   int k = 1000000000;
   std::stringstream oss;
@@ -645,30 +647,31 @@ int main()
 
   for (int i = 0; i < n - 1; i++)
   {
-    long long a = (long long)(1000000 * (0.5f + 0.5f * sin(i / 10000.0f)));
-    long long b = 1;// rand() % 3;
-    oss << a * b << " ";
+    unsigned int range = (unsigned int)(70000 * (0.5f + 0.5f * sin(i / 10000.0f)));
+    oss << range << " ";
   }
 
   for (int i = 0; i < n; i++)
   {
-    long long a = 1;
-    long long b = 1;// rand() % 100;
-    long long c = 1;// rand() % 4;
-    oss << a * b * c << " ";
+    unsigned int fuel = 0;// rand() % 100;
+    oss << fuel << " ";
   }
 
   iss.str(oss.str());
   std::cin.rdbuf(iss.rdbuf());
 
   clock_t t = clock();
-  std::cout << "Control result: 17075\r\n";
-  std::cout << "Control time: 1920 / 340\r\n";
   std::cout << "Test result: " << test() << "\r\n";
   t = clock() - t;
-  std::cout << "Time: " << t << " ms";
+  std::cout << "Time: " << t << " ms\r\n";
 
 
   std::cout << "\r\nPress 'Enter' to exit\r\n";
   getchar();
+
+#else
+
+  std::cout << test();
+
+#endif
 }
